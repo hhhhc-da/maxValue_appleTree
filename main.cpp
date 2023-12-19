@@ -38,6 +38,10 @@ int main(void)
 
         pData->exec();
         pData->print();
+
+        pData->setTime(4);
+        pData->timeCut();
+        pData->print();
     }
 
     return 0;
@@ -51,7 +55,7 @@ int main(void)
  * @introduction : 构造函数
  */
 template <unsigned T>
-Data<T>::Data(unsigned *data, unsigned count) : pos(0), dtData(0), MaxData(0), x13(0)
+Data<T>::Data(unsigned *data, unsigned count) : pos(0), dtData(0), MaxData(0), x13(0), timebase(MAX)
 {
     this->database = new unsigned *[T];
     for (unsigned i = 0; i < T; ++i)
@@ -124,17 +128,26 @@ template <unsigned T>
 void Data<T>::print(void)
 {
     cout << "\n输出队列为: ";
+
+    unsigned counter = 0;
     for (auto i : steps)
     {
-        if (i == MAX)
+        if (counter++ < this->timebase)
         {
-            cout << "* ";
-            continue;
+            if (i == MAX)
+            {
+                cout << "* ";
+                continue;
+            }
+            else
+            {
+                cout << i << " ";
+                continue;
+            }
         }
         else
         {
-            cout << i << " ";
-            continue;
+            break;
         }
     }
 
@@ -158,15 +171,34 @@ void Data<T>::timeCut(void)
     if (!(sz > this->timebase))
         return;
 
-    stack<unsigned> buffer;
-
-    // 本质是通过压栈和减少空闲数量实现的，后面的在同一时刻一定没有先入队的值高（包括后补分配在内）
-    for (auto rbeg = steps.rbegin(); rbeg != steps.rend(); rbeg++)
+    // 由于后面是不可能到达临界值的，所以可以直接插入前面的空位(交换也无所谓，因为差值相同)
+    auto it = find(steps.rbegin(), steps.rend(), MAX);
+    // 直接转换成地址值运算，不然会报错
+    while (&(*it) - &steps[0] > this->timebase)
     {
-        // 将 vcetor 的有效值压栈同时删除该元素，保证前入队的可以优先出栈
-        // this->timebase - vector.size() >= stack.size() OR vctor.size() == 0
+        it = find(it - 1, steps.rend(), MAX);
+    }
 
-        // ... 未完待续
+    unsigned counter = 0;
+
+    while (it != steps.rend())
+    {
+        if (this->timebase + counter < steps.size())
+        {
+            while (*(steps.begin() + this->timebase + counter) == MAX)
+            {
+                if (this->timebase + counter < steps.size())
+                    counter++;
+                else
+                    return;
+            }
+
+            *it = *(steps.begin() + this->timebase + counter++);
+        }
+        else
+            return;
+        // 寻找下一个
+        it = find(it - 1, steps.rend(), MAX);
     }
 }
 
