@@ -3,6 +3,15 @@ using namespace std;
 
 constexpr unsigned MAX = (unsigned)-1;
 
+namespace
+{
+    // 默认全局参数
+    int T = 6;
+    unsigned dtData = 1;
+    unsigned maxData = 7;
+    unsigned timebase = 4;
+}
+
 /*
  * @function     : main
  * @arguments    : void
@@ -12,34 +21,79 @@ constexpr unsigned MAX = (unsigned)-1;
  */
 int main(void)
 {
-    // 作用域在 main 块内
-    constexpr int N = 6;
-    unsigned *arr = new unsigned[N];
-
     while (true)
     {
-        cout << "请输入6个数据: (输入 -1 退出程序)" << endl;
-        cin >> arr[0];
-        if (arr[0] == (unsigned)-1)
+        cout << "提示: 输入任意负数可以结束程序。" << endl;
+
+        try
         {
-            cout << "程序退出" << endl;
-            break;
+            cout << "输入数据个数: " << flush;
+            cin >> T;
+
+            if (T <= 0)
+                throw int(-1);
+
+            cout << "输入递增步长: " << flush;
+            cin >> dtData;
+
+            if (dtData <= 0)
+                throw int(-1);
+
+            cout << "输入递增上界: " << flush;
+            cin >> maxData;
+
+            if (maxData <= 0)
+                throw int(-1);
+
+            cout << "输入限制时间: " << flush;
+            cin >> timebase;
+
+            if (timebase <= 0)
+                throw int(-1);
+        }
+        catch (int i)
+        {
+            cout << "退出程序!" << endl;
+            return 0;
+        }
+        catch (int i)
+        {
+            cout << "其他错误!" << endl
+                 << endl;
+            continue;
         }
 
-        for (unsigned i = 1; i < 6; ++i)
+        unsigned *arr = new unsigned[T];
+
+        cout << "请输入" << T << "个非负数据: " << endl;
+
+        for (unsigned i = 0; i < T; ++i)
         {
             cin >> arr[i];
+
+            if (arr[i] < 0)
+            {
+                while (true)
+                {
+                    cerr << "请勿输入负数，请重新输入此项!" << endl;
+                    cin >> arr[i];
+
+                    if (arr[i] >= 0)
+                        break;
+                }
+            }
         }
 
-        auto pData = new Data<N>(arr, 6);
+        auto pData = new Data(arr, T);
 
         // 前面是差值，后面是上界
-        pData->setConfig(1, 7);
+        pData->setConfig(dtData, maxData);
 
         pData->exec();
         pData->print();
 
-        pData->setTime(4);
+        /* 设置时间限制 */
+        pData->setTime(timebase);
         pData->timeCut();
         pData->print();
     }
@@ -54,20 +108,19 @@ int main(void)
  * @exception    : none
  * @introduction : 构造函数
  */
-template <unsigned T>
-Data<T>::Data(unsigned *data, unsigned count) : pos(0), dtData(0), MaxData(0), x13(0), timebase(MAX)
+Data::Data(unsigned *data, unsigned count) : pos(0), dtData(0), MaxData(0), x13(0), timebase(MAX)
 {
-    this->database = new unsigned *[T];
-    for (unsigned i = 0; i < T; ++i)
+    this->database = new unsigned *[count];
+    for (unsigned i = 0; i < count; ++i)
     {
-        this->database[i] = new unsigned[T - i];
-        for (unsigned j = 0; j < T - i; j++)
+        this->database[i] = new unsigned[count - i];
+        for (unsigned j = 0; j < count - i; j++)
         {
             this->database[i][j] = 0;
         }
     }
 
-    for (unsigned i = 0; i < T; ++i)
+    for (unsigned i = 0; i < count; ++i)
     {
         indexMap.push_back(i);
     }
@@ -88,8 +141,7 @@ Data<T>::Data(unsigned *data, unsigned count) : pos(0), dtData(0), MaxData(0), x
  * @exception    : none
  * @introduction : 析构函数
  */
-template <unsigned T>
-Data<T>::~Data()
+Data::~Data()
 {
     delete[] this->database;
 
@@ -108,8 +160,7 @@ Data<T>::~Data()
  * @exception    : none
  * @introduction : 执行
  */
-template <unsigned T>
-void Data<T>::exec(void)
+void Data::exec(void)
 {
     while (this->indexMap.size() != 0)
     {
@@ -124,8 +175,7 @@ void Data<T>::exec(void)
  * @exception    : none
  * @introduction : 执行
  */
-template <unsigned T>
-void Data<T>::print(void)
+void Data::print(void)
 {
     cout << "\n输出队列为: ";
 
@@ -162,44 +212,92 @@ void Data<T>::print(void)
  * @exception    : none
  * @introduction : 转换为限时模式
  */
-template <unsigned T>
-void Data<T>::timeCut(void)
+void Data::timeCut(void)
 {
     auto sz = this->steps.size();
 
     // 如果能装下直接返回
-    if (!(sz > this->timebase))
+    if (sz <= this->timebase)
         return;
 
-    // 由于后面是不可能到达临界值的，所以可以直接插入前面的空位(交换也无所谓，因为差值相同)
-    auto it = find(steps.rbegin(), steps.rend(), MAX);
-    // 直接转换成地址值运算，不然会报错
-    while (&(*it) - &steps[0] > this->timebase)
-    {
-        it = find(it - 1, steps.rend(), MAX);
-    }
+    // freestep: timebase 内的空闲操作数, freebase: timebase 外的有效操作数
+    unsigned freestep = 0, freebase = 0;
 
-    unsigned counter = 0;
-
-    while (it != steps.rend())
+    // 开辟新的空间，回收没用的内存
+    if (1)
     {
-        if (this->timebase + counter < steps.size())
+        // 临时计数量，退出时自动回收
+        unsigned count = 0, max_count = 0;
+
+        // timebase 内的 max 总数
+        for (auto i : steps)
         {
-            while (*(steps.begin() + this->timebase + counter) == MAX)
+            if (count < timebase)
             {
-                if (this->timebase + counter < steps.size())
-                    counter++;
-                else
-                    return;
+                if (i == MAX)
+                    ++max_count;
             }
+            else
+                break;
 
-            *it = *(steps.begin() + this->timebase + counter++);
+            ++count;
         }
-        else
-            return;
-        // 寻找下一个
-        it = find(it - 1, steps.rend(), MAX);
+
+        freestep = max_count;
+        // 重置计数器
+        max_count = 0;
+
+        // timebase 后的 max 总数
+        for (; count < steps.size(); ++count)
+        {
+            if (steps[count] == MAX)
+                ++max_count;
+        }
+
+        freebase = steps.size() - timebase - max_count;
     }
+
+    // 用于指向 timebase 后的时间步
+    auto freeptr = steps.begin() + timebase;
+
+    // 两者有一个归零就退出
+    while (freestep != 0 && freebase != 0)
+    {
+        // 寻找 timebase 内的第一个MAX
+        auto it = find(steps.rbegin(), steps.rend(), MAX);
+
+        if (it == steps.rend())
+        {
+            cerr << "没有找到 MAX 的值,逻辑出现错误!" << endl
+                 << "timeCut 失败!" << endl;
+            return;
+        }
+
+        // Tips: 直接转换成地址值运算，不然会报错
+        while (&(*it) - &steps[0] > this->timebase)
+        {
+            it = find(it - 1, steps.rend(), MAX);
+
+            if (it == steps.rend())
+            {
+                cerr << "没有找到 MAX 的值,逻辑出现错误!" << endl
+                     << "timeCut 失败!" << endl;
+                return;
+            }
+        }
+
+        // 重定向 freeptr到最近一个非 MAX 的数据
+        while (*freeptr == MAX)
+            ++freeptr;
+
+        // it 指向 timebase 内最后的一个 MAX
+        *it = *freeptr++;
+
+        --freebase;
+        --freestep;
+    }
+
+    steps.erase(steps.begin() + timebase, steps.end());
 }
 
 /*
@@ -209,8 +307,7 @@ void Data<T>::timeCut(void)
  * @exception    : none
  * @introduction : 配置步长、最大值函数
  */
-template <unsigned T>
-void Data<T>::setConfig(unsigned dtData, unsigned MaxData)
+void Data::setConfig(unsigned dtData, unsigned MaxData)
 {
     this->dtData = dtData;
     this->MaxData = MaxData;
@@ -223,8 +320,7 @@ void Data<T>::setConfig(unsigned dtData, unsigned MaxData)
  * @exception    : none
  * @introduction : 配置计时函数
  */
-template <unsigned T>
-void Data<T>::setTime(unsigned time)
+void Data::setTime(unsigned time)
 {
     this->timebase = time;
 }
@@ -236,8 +332,7 @@ void Data<T>::setTime(unsigned time)
  * @exception    : none
  * @introduction : 重置内容
  */
-template <unsigned T>
-void Data<T>::reset(unsigned *data, unsigned count)
+void Data::reset(unsigned *data, unsigned count)
 {
     if (database == nullptr)
     {
@@ -256,8 +351,7 @@ void Data<T>::reset(unsigned *data, unsigned count)
  * @exception    : none
  * @introduction : 获取本行内容
  */
-template <unsigned T>
-void Data<T>::getLine(unsigned **ptr)
+void Data::getLine(unsigned **ptr)
 {
     *ptr = this->database[this->pos];
 }
@@ -269,8 +363,7 @@ void Data<T>::getLine(unsigned **ptr)
  * @exception    : none
  * @introduction : 获取指定行内容
  */
-template <unsigned T>
-void Data<T>::getLineByID(unsigned ID, unsigned **ptr)
+void Data::getLineByID(unsigned ID, unsigned **ptr)
 {
     // 越界操作
     if (ID >= T)
@@ -288,8 +381,7 @@ void Data<T>::getLineByID(unsigned ID, unsigned **ptr)
  * @exception    : none
  * @introduction : 进程递增指定步长
  */
-template <unsigned T>
-void Data<T>::increasePos(unsigned sp)
+void Data::increasePos(unsigned sp)
 {
     this->pos += sp;
 }
@@ -301,8 +393,7 @@ void Data<T>::increasePos(unsigned sp)
  * @exception    : runtime_error
  * @introduction : 时间片向前推进
  */
-template <unsigned T>
-void Data<T>::Increase(void)
+void Data::Increase(void)
 {
     unsigned *nowLine = nullptr;
     getLine(&nowLine);
@@ -320,7 +411,7 @@ void Data<T>::Increase(void)
     for (unsigned i = 0; i < T - this->pos; ++i)
     {
         auto tmp = nowLine[i];
-        if (tmp >= MaxData)
+        if (tmp > MaxData - dtData)
         {
             flag.push_back(i);
             node.push_back(indexMap[i]);
@@ -380,7 +471,7 @@ void Data<T>::Increase(void)
             // 如果她目前还没有满
             if (find(flag.begin(), flag.end(), i) == flag.end())
             {
-                auto tmp = id2value[indexMap[i]] + x13;
+                auto tmp = id2value[indexMap[i]] + x13 * dtData;
                 newLine[j++] = tmp;
             }
             // 如果已经被删了就continue
@@ -423,8 +514,7 @@ void Data<T>::Increase(void)
  * @exception    : none
  * @introduction : 进程递增默认步长
  */
-template <unsigned T>
-void Data<T>::increasePos(void)
+void Data::increasePos(void)
 {
     this->pos += 1;
 }

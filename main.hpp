@@ -14,30 +14,9 @@
 /*
  * 接口类
  */
-template <unsigned T>
 class Data
 {
 public:
-    Data() : database(nullptr), pos(0), dtData(0), MaxData(0), x13(0)
-    {
-        for (unsigned i = 0; i < T; ++i)
-        {
-            this->database[i] = new unsigned[T - i];
-            for (unsigned j = 0; j < T - i; j++)
-            {
-                this->database[i][j] = 0;
-            }
-        }
-
-        for (unsigned i = 0; i < T; ++i)
-        {
-            // 初始化所有东西的下标
-            indexMap.push_back(i);
-            // 初始化所有绑定值
-            id2value[i] = 0;
-        }
-    }
-
     Data(unsigned *data, unsigned count);
     ~Data();
 
